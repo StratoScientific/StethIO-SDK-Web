@@ -4,9 +4,12 @@ const kRecordMic = 'kRecordMic';        // recording flows live data back
 const kRecordRemote = 'kRecordRemote';  // record remote data
 const kPlayback = 'kPlayback';          // play what we have in a loop
 const kPause = 'kPause';                // also pause recording data, if that is happening
+const kPlayBackSpeed = 'kPlayBackSpeed'
 
 var blocksIn = 0;
 class StethWorkletProcessor extends AudioWorkletProcessor {
+    sample;
+    speed;
     constructor() {
         super();
         this._outputRingBuffer = new RingBuffer(500000, 1);
@@ -24,6 +27,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         if (event.data.type == 'samples') {
             this.state = kRecordRemote;
             blocksIn += 1;
+            this.sample = event.data.samples;
             this._outputRingBuffer.push([event.data.samples], event.data.heartMode, event.data.gain);
         } else if (event.data.type == 'setSamples') {
             console.log('[Processor setSamples :Received] num samples: ' + event.data.samples.length);
@@ -50,6 +54,10 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
                     outputBuffer[1][counter] = outputChannel[counter];
                 }
             }
+        } else if(event.data.type === 'speed') {
+            this.speed = event.data.speed;
+        } else if(event.data.type === 'volume'){
+            // this._outputRingBuffer.push([this.sample], event.data.heartMode, event.data.volume, true);
         } else {
             console.log('[Processor:Received] other message: ' + event.data.type);
         }
@@ -75,8 +83,6 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         if (this.state == "kPause") {
             return true; // don't do anything while paused
         }
-
-        // console.log(inputs);
         // console.log(outputs);
         // console.log(parameters);
 
@@ -212,7 +218,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             // we are not adding data here. it comes in via messages handled with handleMessage()
         }
 
-        //console.log('Called process in the thread');
+        // console.log('Called process in the thread');
         // If we wanted to have a web based stethoscope, we would send data obtained here to the remote endpoint.
         // There may be API we can call from the the Chrome AudioWorkletProcessor to get the latest audio as well.
         // this.port.postMessage({ type: 'samples', samples: inputChannel });
@@ -323,9 +329,9 @@ class RingBuffer {
         // The channel count of arraySequence and the length of each channel must
         // match with this buffer obejct.
         // call the filter
-        // if(applyOnlyGain){
-        //     arraySequence[0] = this.gainFilter(arraySequence[0], gain);
-        // } else
+        if(applyOnlyGain){
+            arraySequence[0] = this.gainFilter(arraySequence[0], gain, heartMode);
+        } else
         if(heartMode) {
             arraySequence[0] = this.heartFilter(arraySequence[0], gain);
         } else {
@@ -571,8 +577,12 @@ class RingBuffer {
     }
 
     // Apply only gain filter
-    gainFilter(arraySequence, gain) {
-        arraySequence = this.heartFilters['peek3'].processGain(arraySequence, gain);
+    gainFilter(arraySequence, gain, heartMode) {
+        if(heartMode) {
+            arraySequence = this.heartFilters['peek3'].processGain(arraySequence, gain);
+        } else {
+            arraySequence = this.lungFilters['peek3'].processGain(arraySequence, gain);
+        }
         return arraySequence;
     }
 
