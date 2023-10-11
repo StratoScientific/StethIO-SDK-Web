@@ -17593,7 +17593,7 @@ var OpusDecoder = (function() {
 	OpusDecoder.prototype.setup = (function(config, packets) {
 		var _this = this;
         this.channels = 1
-        var sampling_rate = 16000; // 48000
+        var sampling_rate = 48000; // 48000
 		if (packets.length == 1 && packets[0].data.byteLength == 19) {
             var invalid = false;
             var view8 = new Uint8Array(packets[0].data);

@@ -19,21 +19,25 @@ class App extends Component {
   }
 
   heartData = async () => {
-    let aeInstance = await AudioEngine.initAudioEngine("canvas", "YOUR_SDK_KEY");
+    let aeInstance = await new AudioEngine().initAudioEngine("canvas", "YOUR_SDK_KEY");
     this.setState({ audioEngine: aeInstance });
   };
 
   lungData = async () => {
-    let aeInstance = await AudioEngine.initAudioEngine("canvas", "YOUR_SDK_KEY", {
+    let aeInstance = await new AudioEngine().initAudioEngine("canvas", "YOUR_SDK_KEY", {
       mode: "LUNG",
     });
     this.setState({ audioEngine: aeInstance });
   };
 
   start = () => {
-    this.state.audioEngine.startIt(false).then((res) => {
-      this.state.audioEngine.loadOpusDecoder();
-    });
+    let constraints = { audio: true }
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(async (stream) => {
+    	this.state.audioEngine.startIt(false).then((res) => {
+         this.state.audioEngine.loadOpusDecoder();
+       });
+    }); 
   };
 
   loadAudioFile = () => {
@@ -85,6 +89,31 @@ class App extends Component {
     this.state.audioEngine.testAudioInput(audioBuffer.getChannelData(0));
   };
 
+  speedSelected = (speed) => {
+    if(this.state.audioEngine) {
+      this.state.audioEngine.playbackSpeedChange(speed);
+    }
+  }
+
+  volumeSet = (volume) => {
+    if(this.state.audioEngine) {
+      this.state.audioEngine.volumeSet(volume);
+    }
+  }
+
+  pause = () => {
+    this.state.audioEngine.pause();
+  }
+
+  resume = () => {
+    this.state.audioEngine.resume();
+  }
+
+  stop = () => {
+    this.state.audioEngine.stop();
+  }
+
+  
   render() {
     return (
       <div className="App">
