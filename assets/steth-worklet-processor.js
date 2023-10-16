@@ -72,7 +72,6 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
 
     // we are always called with 128 samples. This is hardwired, which is fine.
     process(inputs, outputs, parameters) {
-        console.log('process log');
         if (this.state == "kPause") {
             return true; // don't do anything while paused
         }
@@ -159,7 +158,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
 
         // Apply latest lung filters
         if(!this.heartMode) {
-            const gProcessingSampleRate = 48000;
+            const gProcessingSampleRate = 16000;
             const LUNG_GAIN_HISTORICAL_TIME_CONSTANT = 5.0; //how we calculate average
             const LUNG_GAIN_FAST_TIME_CONSTANT = 0.02; //how quickly we adjust level
             
@@ -456,7 +455,7 @@ class RingBuffer {
 
     // Apply heart audio gain
     heartGainMaximize(io, currentChunkSize, manualGain = 1) {
-        const gProcessingSampleRate = 48000;
+        const gProcessingSampleRate = 16000;
         const gMaxSignalHeart = 1.5;
         const gMinHeartGain = 2.0;
         if(!this.heart_currentGain) {
@@ -579,7 +578,7 @@ class RingBuffer {
 
     // Apply lung gain filter
     stethFilter_getAppropriateGainLung(buffer, frames) {
-        const gProcessingSampleRate = 48000;
+        const gProcessingSampleRate = 16000;
         const gLungGainDesiredAverage = 0.1;
 
         let sampleGain = 0.0;
@@ -682,7 +681,7 @@ class RingBuffer {
  
 class BiquadNode {
   constructor() {
-    this.sampleRate = 48000;
+    this.sampleRate = 16000;
     this.swap = 0;
     this.a0 = 1.0;
     this.a1 = 0.0;
