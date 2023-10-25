@@ -4,11 +4,15 @@ const kRecordMic = 'kRecordMic';        // recording flows live data back
 const kRecordRemote = 'kRecordRemote';  // record remote data
 const kPlayback = 'kPlayback';          // play what we have in a loop
 const kPause = 'kPause';                // also pause recording data, if that is happening
+const kPlayBackSpeed = 'kPlayBackSpeed'
 
 var blocksIn = 0;
 class StethWorkletProcessor extends AudioWorkletProcessor {
+    sample;
+    speed;
     constructor() {
-        super();
+      console.log("Worklet Registered");
+      super();
         this._outputRingBuffer = new RingBuffer(500000, 1);
         this.port.onmessage = this.handleMessage_.bind(this);
         this.outBuffer = new Float32Array(512); // 128 is locked in as in buffer size, so we wait until this is full
@@ -22,9 +26,12 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
     // WorletSystem sends a message with the data every time it gets a Float32Array buffer of samples ready.
     handleMessage_(event) {
         if (event.data.type == 'samples') {
-            this.state = kRecordRemote;
+          this.state = kRecordRemote;
             blocksIn += 1;
-            this._outputRingBuffer.push([event.data.samples], event.data.heartMode, event.data.gain);
+            this.sample = event.data.samples;
+          console.log(this._outputRingBuffer);
+          console.log(event);
+            this._outputRingBuffer.push([event.data.samples], event.data.heartMode, event.data.gain,false, event.data.isAutoGainEnabled, event.data.isFilterEnabled);
         } else if (event.data.type == 'setSamples') {
             console.log('[Processor setSamples :Received] num samples: ' + event.data.samples.length);
             this.state = kPlayback;
@@ -50,6 +57,11 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
                     outputBuffer[1][counter] = outputChannel[counter];
                 }
             }
+        } else if(event.data.type === 'speed') {
+            this.speed = event.data.speed;
+        } else if(event.data.type === 'volume'){
+          console.log(event.data.volume)
+            this._outputRingBuffer.push([this.sample], event.data.heartMode, event.data.volume, true);
         } else {
             console.log('[Processor:Received] other message: ' + event.data.type);
         }
@@ -75,8 +87,6 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         if (this.state == "kPause") {
             return true; // don't do anything while paused
         }
-
-        // console.log(inputs);
         // console.log(outputs);
         // console.log(parameters);
 
@@ -92,7 +102,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             // const HFthresholdLevel = 0.002;
             // const HFMaxGainReduction = 0.05;
             // const highpassCutoff = 5000.0;
-            
+
             // //First-order high-pass filter
             // var w = Math.tan(Math.PI * highpassCutoff / gProcessingSampleRate);
             // var a0 = 1.0 / (1.0 + w);
@@ -100,9 +110,9 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             // var sample;
             // var reduceGain;
             // var filtered = 0.0;
-            
+
             // for(var k = 0; k < inputChannel.length; ++k) {
-            //     sample = inputChannel[k];            
+            //     sample = inputChannel[k];
             //     filtered = a0 * (sample - this.z1) + b1 * this.p1;
             //     this.z1 = sample;
             //     this.p1 = filtered;
@@ -113,12 +123,12 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             //         //drop lung gain in greater proportion to the HF noise
             //         reduceGain = (HFthresholdLevel / absLevel);
             //         reduceGain *= reduceGain;
-            //         if(reduceGain < HFMaxGainReduction)
-            //             reduceGain = HFMaxGainReduction;   
+            //         if(reduceGain < HFMaxGainGainReduction)
+            //             reduceGain = HFMaxGainReduction;
             //     } else {
             //         reduceGain = 1.0;
             //     }
-            
+
             //     outputChannel[k] = sample * reduceGain;
             // }
 
@@ -131,7 +141,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             // if(typeof inputChannel === 'undefined') {
             //     return true;
             // }
-            
+
             // for(var k = 0; k < inputChannel.length; ++k) {
             //     this.lungHistoricalAverage = alphaMeasure * Math.abs(inputChannel[k]) + (1.0 - alphaMeasure) * this.lungHistoricalAverage;
             // }
@@ -144,7 +154,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             // if (lungGainTarget < 0.5) {
             //     lungGainTarget = 0.5;
             // }
-                    
+
             // for(var k = 0; k < inputChannel.length; ++k) {
             //     this.sampleGain += alphaAdjust * (lungGainTarget - this.sampleGain);
             //     outputChannel[k] = inputChannel[k] * this.sampleGain;
@@ -158,38 +168,38 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
 
         // Apply latest lung filters
         if(!this.heartMode) {
-            const gProcessingSampleRate = 16000;
+            const gProcessingSampleRate = 44100;
             const LUNG_GAIN_HISTORICAL_TIME_CONSTANT = 5.0; //how we calculate average
             const LUNG_GAIN_FAST_TIME_CONSTANT = 0.02; //how quickly we adjust level
-            
+
             const alphaMeasure = 1.0 / (LUNG_GAIN_HISTORICAL_TIME_CONSTANT * gProcessingSampleRate);
             const alphaAdjust = 1.0 / (LUNG_GAIN_FAST_TIME_CONSTANT * gProcessingSampleRate);
-            
-            var lungGainTarget; 
+
+            var lungGainTarget;
 
             const input0 = inputs[0];
             const output0 = outputs[0];
             const inputChannel = input0[0];
             const outputChannel = output0[0];
-            
+
             if(typeof inputChannel === 'undefined') {
                 return true;
             }
-            
+
             for(var k = 0; k < inputChannel.length; ++k) {
                 this.lungHistoricalAverage = alphaMeasure * Math.abs(inputChannel[k]) + (1.0 - alphaMeasure) * this.lungHistoricalAverage;
             }
-            
+
             lungGainTarget = this.lungLevelDesired / this.lungHistoricalAverage;
-            
+
             if (lungGainTarget > 15.0) {
                 lungGainTarget = 15.0;
             }
-                
+
             if (lungGainTarget < 0.5) {
                 lungGainTarget = 0.5;
             }
-                    
+
             for(var k = 0; k < inputChannel.length; ++k) {
                 this.sampleGain += alphaAdjust * (lungGainTarget - this.sampleGain);
                 outputChannel[k] = inputChannel[k] * this.sampleGain;
@@ -199,7 +209,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         // If its live recording input
         if (this.state == kRecordMic) {
             const inputBuffer = inputs[0];
-            // Low pass filter logic  --  For input 
+            // Low pass filter logic  --  For input
                 // let pasFilterSamples = [...inputChannel];
                 // // 600hz is for heart and lung range frequency
                 // inpRes = this.lowPassFilter(pasFilterSamples, 600, 44100, this.last_val);
@@ -212,7 +222,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             // we are not adding data here. it comes in via messages handled with handleMessage()
         }
 
-        //console.log('Called process in the thread');
+        // console.log('Called process in the thread');
         // If we wanted to have a web based stethoscope, we would send data obtained here to the remote endpoint.
         // There may be API we can call from the the Chrome AudioWorkletProcessor to get the latest audio as well.
         // this.port.postMessage({ type: 'samples', samples: inputChannel });
@@ -319,18 +329,22 @@ class RingBuffer {
      * @param  {array} arraySequence A sequence of Float32Arrays.
      * @param  {boolean} heartMode A boolean to check if its heart mode. If false its lung mode
      */
-    push(arraySequence, heartMode = true, gain, applyOnlyGain = false) {
+    push(arraySequence, heartMode = true, gain, applyOnlyGain = false,isAutoGainEnabled = true , isFilterEnabled =true) {
         // The channel count of arraySequence and the length of each channel must
         // match with this buffer obejct.
         // call the filter
-        // if(applyOnlyGain){
-        //     arraySequence[0] = this.gainFilter(arraySequence[0], gain);
-        // } else
+
+      if(isFilterEnabled) {
+        if(applyOnlyGain){
+          arraySequence[0] = this.gainFilter(arraySequence[0], gain, heartMode);
+        } else
         if(heartMode) {
-            arraySequence[0] = this.heartFilter(arraySequence[0], gain);
+          arraySequence[0] = this.heartFilter(arraySequence[0], "1", isAutoGainEnabled);
         } else {
-            arraySequence[0] = this.lungFilter(arraySequence[0], gain);
+          arraySequence[0] = this.lungFilter(arraySequence[0], gain, isAutoGainEnabled);
         }
+      }
+
         // Transfer data from the |arraySequence| storage to the internal buffer.
         // Source length is always 960
         let sourceLength = arraySequence[0].length;
@@ -414,7 +428,7 @@ class RingBuffer {
     }
 
     // Apply the heart filters
-    heartFilter(arraySequence, gain) {
+    heartFilter(arraySequence, gain, isAutoGainEnabled = true) {
         arraySequence = this.heartFilters['hp'].process(arraySequence);
         arraySequence = this.heartFilters['peek'].process(arraySequence);
         arraySequence = this.heartFilters['lp'].process(arraySequence);
@@ -424,13 +438,15 @@ class RingBuffer {
         arraySequence = this.heartFilters['peek1'].process(arraySequence);
         arraySequence = this.heartFilters['peek2'].process(arraySequence);
         arraySequence = this.heartFilters['peek3'].process(arraySequence);
-        arraySequence = this.heartGainMaximize(arraySequence, arraySequence.length, gain);
+        if(isAutoGainEnabled) {
+          arraySequence = this.heartGainMaximize(arraySequence, arraySequence.length, gain);
+        }
         arraySequence = this.heartFilters['peek3'].processGain(arraySequence, parseFloat(gain));
         return arraySequence;
     }
 
     // Apply lung filters
-    lungFilter(arraySequence, gain) {
+    lungFilter(arraySequence, gain, isAutoGainEnabled = true) {
         arraySequence = this.lungFilters['hp'].process(arraySequence);
         arraySequence = this.lungFilters['lp'].process(arraySequence);
         arraySequence = this.lungFilters['bw'].process(arraySequence);
@@ -455,7 +471,7 @@ class RingBuffer {
 
     // Apply heart audio gain
     heartGainMaximize(io, currentChunkSize, manualGain = 1) {
-        const gProcessingSampleRate = 16000;
+        const gProcessingSampleRate = 44100;
         const gMaxSignalHeart = 1.5;
         const gMinHeartGain = 2.0;
         if(!this.heart_currentGain) {
@@ -468,12 +484,12 @@ class RingBuffer {
 
         let peakInitialEstimate = 0.1;
         let peakHeldEstimate = 0.1;
-        
+
         let debugCounter = 0;
-        
+
         let noiseDecay = (1.0 / (0.5 * gProcessingSampleRate)); //500ms peak decay
         let noisePeak = 0.0;
-        
+
         //int holdEstimateSamples = (int)(holdEstimateTime * gProcessingSampleRate);
 
         let peakInitialDecayAlpha = (1.0 / (1.0 * gProcessingSampleRate)); //peak level initial est TC (1 second)
@@ -483,12 +499,12 @@ class RingBuffer {
         //Gain smoothing time constant
         let gainIncreaseAlpha = (1.0 / (1.0 * gProcessingSampleRate)); //1 second
         let gainDecreaseAlpha = (1.0 / (1.0 * gProcessingSampleRate)); //1 second
-        
+
         let nse, level, gainTarget, alpha;
         let k;
         let noiseDisable = 0;
         let statusStr;
-        
+
         //Maintain an estimate of peak level using initial and final estimates.
 
 
@@ -498,10 +514,10 @@ class RingBuffer {
             this.runBiquad.setHighpass2(250, 0.707107);
             nse = this.runBiquad.process(io[k]);
             // nse = runBiquad(&HighPass250, gProcessingSampleRate, io[k]);
-            
+
             noisePeak = this.peakDetect(nse, noisePeak, noiseDecay);
             //peakDetect(level, &lowPeak, signalDecay);
-            
+
             if(noisePeak < maxNoise) {
                 if(level > peakInitialEstimate) {
                     peakInitialEstimate = level; //typically this is a loud heartbeat but might be noise
@@ -513,7 +529,7 @@ class RingBuffer {
             } else {
                 noiseDisable = 1;
             }
-            
+
             if(peakInitialEstimate > peakHeldEstimate) {
                 peakHeldEstimate += peakHeldAttackAlpha * (peakInitialEstimate - peakHeldEstimate);
             } else {
@@ -522,31 +538,31 @@ class RingBuffer {
                 peakHeldEstimate += peakHeldDecayAlpha * (peakInitialEstimate - peakHeldEstimate);
             }
         }
-        
+
         if(noiseDisable) {
             statusStr = "Disable";
         } else {
             statusStr = "Enable";
         }
-        
+
         //prevent zero division
         if(peakHeldEstimate < 0.0001) {
             peakHeldEstimate = 0.0001;
         }
-        
+
         gainTarget = gMaxSignalHeart / peakHeldEstimate;
-        
-        
+
+
         if(gainTarget > maxGain){
             gainTarget = maxGain;
         }
-        
+
         if(gainTarget < gMinHeartGain){
             gainTarget = gMinHeartGain;
         }
-        
+
         //smoothly change the gain
-        
+
         let hgain = this.heart_currentGain; //Global heart_currentGain
 
         if(hgain < Number.MIN_VALUE) {
@@ -558,45 +574,49 @@ class RingBuffer {
             hgain += alpha * (gainTarget - hgain);
             io[k] *= hgain;
         }
-    
+
         if(++debugCounter > 10) {
             debugCounter = 0;
-            console.log('noise ' + noisePeak + ': ' + statusStr + ' ,finalpk ' + peakHeldEstimate + ' ,gain ' + hgain + ' , Fs ' + gProcessingSampleRate);
+            console.log(`noise ${noisePeak}: ${statusStr}, finalpk ${peakHeldEstimate}, gain ${hgain}, Fs ${gProcessingSampleRate}`);
             // printf("noise %f: %s, finalpk %f, gain %f, Fs %f\n", noisePeak, statusStr, peakHeldEstimate, hgain, gProcessingSampleRate);
         }
-        
+
         this.heart_currentGain = hgain;
 
         return io;
     }
 
     // Apply only gain filter
-    gainFilter(arraySequence, gain) {
-        arraySequence = this.heartFilters['peek3'].processGain(arraySequence, gain);
+    gainFilter(arraySequence, gain, heartMode) {
+        if(heartMode) {
+            arraySequence = this.heartFilters['peek3'].processGain(arraySequence, gain);
+        } else {
+            arraySequence = this.lungFilters['peek3'].processGain(arraySequence, gain);
+        }
         return arraySequence;
     }
 
     // Apply lung gain filter
     stethFilter_getAppropriateGainLung(buffer, frames) {
-        const gProcessingSampleRate = 16000;
+        const gProcessingSampleRate = 44100;
         const gLungGainDesiredAverage = 0.1;
 
         let sampleGain = 0.0;
         let kAlpha = 1.0 / (gProcessingSampleRate * 5.0);
         let kFast = 1.0 / (gProcessingSampleRate * 0.02);
-        
+
         // if (shouldCalculateGain(frames)) { }
         for (let count = 0; count < frames; count++) {
             this.lung_historical_average = (kAlpha * Math.abs(buffer[count])) + (1.0 - kAlpha) * this.lung_historical_average;
         }
-    
+
         let lung_gain = gLungGainDesiredAverage*1.0/this.lung_historical_average;
-    
+
         if (lung_gain > 10.0) // change to double or triple, brighten up screen, goal is lung_gain * audio [0..1.00] == 1.0
             lung_gain = 10.0;
         if (lung_gain < 0.1)
             lung_gain = 0.1;
-        
+
         for (let count = 0; count <frames; count++)
         {
             //1st order (pole only) IIR filter applied to gain per sample
@@ -678,10 +698,10 @@ class RingBuffer {
 
 } // class RingBuffer
 
- 
+
 class BiquadNode {
   constructor() {
-    this.sampleRate = 16000;
+    this.sampleRate = 44100;
     this.swap = 0;
     this.a0 = 1.0;
     this.a1 = 0.0;
@@ -812,7 +832,7 @@ class BiquadNode {
   processGain(inputChannel, gain) {
     if(typeof inputChannel === 'undefined') {
         return true;
-    } 
+    }
     for(var k = 0; k < inputChannel.length; ++k) {
         inputChannel[k] = inputChannel[k] * gain;
     }
