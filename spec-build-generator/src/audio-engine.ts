@@ -50,7 +50,7 @@ export default class AudioEngine {
     heartGain = 1; // min 1 max 3
     mode: 'HEART' | 'LUNG' = 'HEART';
     lowAudioFlag: number = 0;
-    static _instance: AudioEngine;
+    instance: AudioEngine;
     spectrogramDrawer: SpectrogramDrawer;
     filterFunctions: any = {};
     decodedPackets: Array<any> = [];
@@ -68,7 +68,9 @@ export default class AudioEngine {
     distortion: any;
     gainNode: any;
     convolver: any;
-    static endpoint = 'https://stagingapi.stethio.com';
+    isFilterEnabled: any;
+    isAutoGainEnabled: any;
+    endpoint = 'https://stagingapi.stethio.com';
 
     private constructor(divID: string, config) {
 
@@ -100,6 +102,8 @@ export default class AudioEngine {
         this.refreshTimer = 0;
         this.divID = divID;
         this.lowAudioFlag = 0;
+        this.isFilterEnabled = true;
+        this.isAutoGainEnabled = true;
 
         if (config) {
             if (config.mode == 'HEART') {
@@ -112,7 +116,7 @@ export default class AudioEngine {
         }
     }
 
-    static async initAudioEngine (divId: string , sdkKey: string, config?: {mode: 'HEART' | 'LUNG', gain: any}) {
+    async initAudioEngine (divId: string , sdkKey: string, config?: {mode: 'HEART' | 'LUNG', gain: any}) {
         try {
             const response  = await fetch(`${this.endpoint}/api/sdk/key/verify/?encrypt=false`, {
                 method : "POST",
@@ -130,11 +134,11 @@ export default class AudioEngine {
             });
             const data = await response.json();
             if(data.hasOwnProperty('is_active') && data['is_active'] == true) {
-                if(this._instance === undefined){
-                    this._instance = new AudioEngine(divId, config);
+                if(this.instance === undefined){
+                    this.instance = new AudioEngine(divId, config);
                 }
                 console.log('StethIO Spectrogram Initialized Successfully!');
-                return this._instance;
+                return this.instance;
             }
             console.log('SDK Key Invalid. StethIO Spectrogram Initialized Failed!');
             return;
@@ -145,13 +149,18 @@ export default class AudioEngine {
         }
     }
 
-
+    async setAutoGainFlag(isAutoGainEnabled: boolean) {
+        this.isAutoGainEnabled = isAutoGainEnabled;
+    }
+    async setFilterFlag(isFilterEnabled: boolean) {
+        this.isFilterEnabled = isFilterEnabled;
+    }
     
     // start the audio chain.
     async startIt(liveInput: boolean) {
 
         // TODO: {sampleRate: 16000}
-        this.audioContext = new AudioContext({sampleRate: 16000});
+        this.audioContext = new AudioContext({sampleRate: 44100});
         // await this.initiliseFilter(true);
         
         /* Setting up audio filters variables */
@@ -159,12 +168,13 @@ export default class AudioEngine {
         this.distortion = this.audioContext.createWaveShaper();
         this.gainNode = this.audioContext.createGain();
         this.convolver = this.audioContext.createConvolver();
+
         // this.bufferSource = this.audioContext.createBufferSource();
 
-        // await this.audioContext.audioWorklet.addModule('https://cdn.jsdelivr.net/gh/StratoScientific/StethIO-SDK-Web/assets/steth-worklet-processor.js')
+        await this.audioContext.audioWorklet.addModule('https://cdn.jsdelivr.net/gh/StratoScientific/StethIO-SDK-Web/assets/steth-worklet-processor.js', {"credentials": "omit"})
         console.log('startIt start');
 
-        await this.audioContext.audioWorklet.addModule('assets/steth-worklet-processor.js', {"credentials": "omit"});
+        // await this.audioContext.audioWorklet.addModule('assets/steth-worklet-processor.js', {"credentials": "omit"});
         console.log('startIt');
         return this.onModuleAdded(liveInput);
         /* try {
@@ -298,7 +308,7 @@ export default class AudioEngine {
                     autoGainControl: false,
                     noiseSuppression: false,
                     //echoCancellationType: 'browser', // https://developers.google.com/web/updates/2018/06/more-native-echo-cancellation
-                    sampleRate: 16000
+                    sampleRate: 44100
                 }
             };
         } else {
@@ -310,7 +320,7 @@ export default class AudioEngine {
                     autoGainControl: false,
                     noiseSuppression: false,
                     //echoCancellationType: 'browser', // https://developers.google.com/web/updates/2018/06/more-native-echo-cancellation
-                    sampleRate: 16000
+                    sampleRate: 44100
                 }
             };
         }
@@ -587,7 +597,9 @@ export default class AudioEngine {
         if(this.socketWorkletNode) {
             this.socketWorkletNode.port.postMessage({
                 type: 'samples', samples: arrayBuffer,
-                heartMode, gain: (heartMode) ? this.heartGain : this.lungGain
+                heartMode, gain: (heartMode) ? this.heartGain : this.lungGain,
+                isAutoGainEnabled: this.isAutoGainEnabled,
+                isFilterEnabled: this.isFilterEnabled
             });
         }
     }
@@ -612,11 +624,11 @@ export default class AudioEngine {
         // "2051">Restricted Low Delay
         // Sample rate used to be 48000 but since mobile changed to 16000
         const enc_cfg = {
-            sampling_rate: 16000,
+            sampling_rate: 44100,
             num_of_channels: 1,
             params: {
                 application: 2049,
-                sampling_rate: 16000,
+                sampling_rate: 48000,
                 frame_duration: 20 // ms
             }
         };
@@ -633,7 +645,7 @@ export default class AudioEngine {
 
         // this.decoder = new AudioDecoder('./assets/opus_decoder.js');
         this.decoderOperational = true;
-        return this.decoder.setup({channels: 1, sampling_rate: 16000}, {}); // 48000
+        return this.decoder.setup({channels: 1, sampling_rate: 44100}, {}); // 48000
     }
 
     handleWorkletProcessorMessage = (event) => {
