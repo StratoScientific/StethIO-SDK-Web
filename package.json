@@ -1,6 +1,6 @@
 {
   "name": "spectrogram-drawer",
-  "version": "1.0.16",
+  "version": "1.3.5",
   "description": "Spectrogram drawer for heart, lung and bowel sounds",
   "main": "./dist/prod.js",
   "module": "./dist/prod.js",
