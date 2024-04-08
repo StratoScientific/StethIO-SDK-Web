@@ -1,6 +1,6 @@
 <div class="frame">
     <canvas id="canvas"></canvas>
-
+    <canvas id="canvas1"></canvas>
 </div>
 <div class="actions">
     <div class="select">
@@ -18,6 +18,7 @@
              <option *ngFor="let speed of playbackSpeedList" [value]="speed">{{speed}}</option>
          </select>
     <!-- </div>
+
     <div> -->
         <span>Volume: ({{volume}})</span>
         <button class="volume-button" (click)="volumeUp(false)" [disabled]="volume == 0">-</button>
@@ -25,11 +26,16 @@
         <button  class="volume-button" (click)="volumeUp(true)"  [disabled]="volume == 100">+</button>
     </div>
     <div>
-        <button (click)="start()">Start</button>
+        <button (click)="startAll()">Start</button>
+        <button (click)="mute()">Mute</button>
+        <button (click)="unMute()">UnMute</button>
+        <button (click)="start1()">Start1</button>
         <button (click)="pause()">Pause</button>
+        <button (click)="pause1()">Pause1</button>
         <button (click)="resume()">Resume</button>
         <button (click)="stop()">Stop</button>
         <button (click)="loadAudioFile()">Load audio</button>
+        <button (click)="loadAudioFile1()">Load audio1</button>
         <button (click)="startMicRecording()">Microphone</button>
     </div>
 </div>
