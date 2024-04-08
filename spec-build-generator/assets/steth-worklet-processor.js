@@ -10,6 +10,7 @@ var blocksIn = 0;
 class StethWorkletProcessor extends AudioWorkletProcessor {
     sample;
     speed;
+    volume;
     constructor() {
         super();
         this._outputRingBuffer = new RingBuffer(500000, 1);
@@ -28,7 +29,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
             this.state = kRecordRemote;
             blocksIn += 1;
             this.sample = event.data.samples;
-            this._outputRingBuffer.push([event.data.samples], event.data.heartMode, event.data.gain);
+            this._outputRingBuffer.push([event.data.samples], event.data.heartMode, event.data.gain,false, event.data.isAutoGainEnabled, event.data.isFilterEnabled);
         } else if (event.data.type == 'setSamples') {
             console.log('[Processor setSamples :Received] num samples: ' + event.data.samples.length);
             this.state = kPlayback;
@@ -57,6 +58,7 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         } else if(event.data.type === 'speed') {
             this.speed = event.data.speed;
         } else if(event.data.type === 'volume'){
+            this.volume = event.data.volume;
             this._outputRingBuffer.push([this.sample], event.data.heartMode, event.data.volume, true);
         } else {
             console.log('[Processor:Received] other message: ' + event.data.type);
@@ -69,17 +71,17 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         this._outputRingBuffer.push([allSamples], heartMode, gain, true);
         this.heartMode = heartMode;
         // DEBUG: If its martins audio run audio filter for sample
-            // if(allSamples[0] == -0.000518798828125) {
-            //     // 600hz is for heart and lung range frequency
-            //     const inpRes = this.lowPassFilter(allSamples, 600, 44100, this.last_val);
-            //     this._outputRingBuffer.push([inpRes.samples]);
-            // } else {
-            //     this._outputRingBuffer.push([allSamples]);
-            // }
+        // if(allSamples[0] == -0.000518798828125) {
+        //     // 600hz is for heart and lung range frequency
+        //     const inpRes = this.lowPassFilter(allSamples, 600, 44100, this.last_val);
+        //     this._outputRingBuffer.push([inpRes.samples]);
+        // } else {
+        //     this._outputRingBuffer.push([allSamples]);
+        // }
     }
 
     // we are always called with 128 samples. This is hardwired, which is fine.
-    process(inputs, outputs, parameters) {
+        process(inputs, outputs, parameters) {
         if (this.state == "kPause") {
             return true; // don't do anything while paused
         }
@@ -94,69 +96,69 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         // const outputChannel = output0[0];
 
         // Lung noice gate filtering
-            // const alpha = 1.0 / (0.01 * gProcessingSampleRate);
-            // const HFthresholdLevel = 0.002;
-            // const HFMaxGainReduction = 0.05;
-            // const highpassCutoff = 5000.0;
-            
-            // //First-order high-pass filter
-            // var w = Math.tan(Math.PI * highpassCutoff / gProcessingSampleRate);
-            // var a0 = 1.0 / (1.0 + w);
-            // var b1 = (1.0 - w) / (1.0 + w);
-            // var sample;
-            // var reduceGain;
-            // var filtered = 0.0;
-            
-            // for(var k = 0; k < inputChannel.length; ++k) {
-            //     sample = inputChannel[k];            
-            //     filtered = a0 * (sample - this.z1) + b1 * this.p1;
-            //     this.z1 = sample;
-            //     this.p1 = filtered;
-            //     this.HF_Level = alpha * Math.abs(filtered) + (1.0 - alpha) * this.HF_Level;
+        // const alpha = 1.0 / (0.01 * gProcessingSampleRate);
+        // const HFthresholdLevel = 0.002;
+        // const HFMaxGainReduction = 0.05;
+        // const highpassCutoff = 5000.0;
 
-            //     var absLevel = Math.abs(this.HF_Level);
-            //     if(absLevel > HFthresholdLevel) {
-            //         //drop lung gain in greater proportion to the HF noise
-            //         reduceGain = (HFthresholdLevel / absLevel);
-            //         reduceGain *= reduceGain;
-            //         if(reduceGain < HFMaxGainReduction)
-            //             reduceGain = HFMaxGainReduction;   
-            //     } else {
-            //         reduceGain = 1.0;
-            //     }
-            
-            //     outputChannel[k] = sample * reduceGain;
-            // }
+        // //First-order high-pass filter
+        // var w = Math.tan(Math.PI * highpassCutoff / gProcessingSampleRate);
+        // var a0 = 1.0 / (1.0 + w);
+        // var b1 = (1.0 - w) / (1.0 + w);
+        // var sample;
+        // var reduceGain;
+        // var filtered = 0.0;
+
+        // for(var k = 0; k < inputChannel.length; ++k) {
+        //     sample = inputChannel[k];
+        //     filtered = a0 * (sample - this.z1) + b1 * this.p1;
+        //     this.z1 = sample;
+        //     this.p1 = filtered;
+        //     this.HF_Level = alpha * Math.abs(filtered) + (1.0 - alpha) * this.HF_Level;
+
+        //     var absLevel = Math.abs(this.HF_Level);
+        //     if(absLevel > HFthresholdLevel) {
+        //         //drop lung gain in greater proportion to the HF noise
+        //         reduceGain = (HFthresholdLevel / absLevel);
+        //         reduceGain *= reduceGain;
+        //         if(reduceGain < HFMaxGainGainReduction)
+        //             reduceGain = HFMaxGainReduction;
+        //     } else {
+        //         reduceGain = 1.0;
+        //     }
+
+        //     outputChannel[k] = sample * reduceGain;
+        // }
 
         // Auto gain level adjustment
-            // var lungGainTarget;
-            // const LUNG_GAIN_HISTORICAL_TIME_CONSTANT = 5.0; //how we calculate average
-            // const LUNG_GAIN_FAST_TIME_CONSTANT = 0.02; //how quickly we adjust level
-            // const alphaMeasure = 1.0 / (LUNG_GAIN_HISTORICAL_TIME_CONSTANT * gProcessingSampleRate);
-            // const alphaAdjust = 1.0 / (LUNG_GAIN_FAST_TIME_CONSTANT * gProcessingSampleRate);
-            // if(typeof inputChannel === 'undefined') {
-            //     return true;
-            // }
-            
-            // for(var k = 0; k < inputChannel.length; ++k) {
-            //     this.lungHistoricalAverage = alphaMeasure * Math.abs(inputChannel[k]) + (1.0 - alphaMeasure) * this.lungHistoricalAverage;
-            // }
+        // var lungGainTarget;
+        // const LUNG_GAIN_HISTORICAL_TIME_CONSTANT = 5.0; //how we calculate average
+        // const LUNG_GAIN_FAST_TIME_CONSTANT = 0.02; //how quickly we adjust level
+        // const alphaMeasure = 1.0 / (LUNG_GAIN_HISTORICAL_TIME_CONSTANT * gProcessingSampleRate);
+        // const alphaAdjust = 1.0 / (LUNG_GAIN_FAST_TIME_CONSTANT * gProcessingSampleRate);
+        // if(typeof inputChannel === 'undefined') {
+        //     return true;
+        // }
 
-            // lungGainTarget = this.lungLevelDesired / this.lungHistoricalAverage;
+        // for(var k = 0; k < inputChannel.length; ++k) {
+        //     this.lungHistoricalAverage = alphaMeasure * Math.abs(inputChannel[k]) + (1.0 - alphaMeasure) * this.lungHistoricalAverage;
+        // }
 
-            // if (lungGainTarget > 15.0) {
-            //     lungGainTarget = 15.0;
-            // }
-            // if (lungGainTarget < 0.5) {
-            //     lungGainTarget = 0.5;
-            // }
-                    
-            // for(var k = 0; k < inputChannel.length; ++k) {
-            //     this.sampleGain += alphaAdjust * (lungGainTarget - this.sampleGain);
-            //     outputChannel[k] = inputChannel[k] * this.sampleGain;
-            // }
+        // lungGainTarget = this.lungLevelDesired / this.lungHistoricalAverage;
 
-            // console.log("Processing happening !!");
+        // if (lungGainTarget > 15.0) {
+        //     lungGainTarget = 15.0;
+        // }
+        // if (lungGainTarget < 0.5) {
+        //     lungGainTarget = 0.5;
+        // }
+
+        // for(var k = 0; k < inputChannel.length; ++k) {
+        //     this.sampleGain += alphaAdjust * (lungGainTarget - this.sampleGain);
+        //     outputChannel[k] = inputChannel[k] * this.sampleGain;
+        // }
+
+        // console.log("Processing happening !!");
 
         // const inputBuffer = inputs[0];
         // const inputChannel = inputBuffer[0];
@@ -164,38 +166,38 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
 
         // Apply latest lung filters
         if(!this.heartMode) {
-            const gProcessingSampleRate = 16000;
+            const gProcessingSampleRate = 44100;
             const LUNG_GAIN_HISTORICAL_TIME_CONSTANT = 5.0; //how we calculate average
             const LUNG_GAIN_FAST_TIME_CONSTANT = 0.02; //how quickly we adjust level
-            
+
             const alphaMeasure = 1.0 / (LUNG_GAIN_HISTORICAL_TIME_CONSTANT * gProcessingSampleRate);
             const alphaAdjust = 1.0 / (LUNG_GAIN_FAST_TIME_CONSTANT * gProcessingSampleRate);
-            
-            var lungGainTarget; 
+
+            var lungGainTarget;
 
             const input0 = inputs[0];
             const output0 = outputs[0];
             const inputChannel = input0[0];
             const outputChannel = output0[0];
-            
+
             if(typeof inputChannel === 'undefined') {
                 return true;
             }
-            
+
             for(var k = 0; k < inputChannel.length; ++k) {
                 this.lungHistoricalAverage = alphaMeasure * Math.abs(inputChannel[k]) + (1.0 - alphaMeasure) * this.lungHistoricalAverage;
             }
-            
+
             lungGainTarget = this.lungLevelDesired / this.lungHistoricalAverage;
-            
+
             if (lungGainTarget > 15.0) {
                 lungGainTarget = 15.0;
             }
-                
+
             if (lungGainTarget < 0.5) {
                 lungGainTarget = 0.5;
             }
-                    
+
             for(var k = 0; k < inputChannel.length; ++k) {
                 this.sampleGain += alphaAdjust * (lungGainTarget - this.sampleGain);
                 outputChannel[k] = inputChannel[k] * this.sampleGain;
@@ -205,13 +207,13 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         // If its live recording input
         if (this.state == kRecordMic) {
             const inputBuffer = inputs[0];
-            // Low pass filter logic  --  For input 
-                // let pasFilterSamples = [...inputChannel];
-                // // 600hz is for heart and lung range frequency
-                // inpRes = this.lowPassFilter(pasFilterSamples, 600, 44100, this.last_val);
-                // this.last_val = inpRes.last_val;
-                // // add input, which will be microphone, to the output
-                // this._outputRingBuffer.push([inpRes.samples]);
+            // Low pass filter logic  --  For input
+            // let pasFilterSamples = [...inputChannel];
+            // // 600hz is for heart and lung range frequency
+            // inpRes = this.lowPassFilter(pasFilterSamples, 600, 44100, this.last_val);
+            // this.last_val = inpRes.last_val;
+            // // add input, which will be microphone, to the output
+            // this._outputRingBuffer.push([inpRes.samples]);
             const inputChannel = inputBuffer[0];
             this._outputRingBuffer.push([inputChannel])
         } else {
@@ -235,8 +237,9 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         }
         // pull frame from our buffer
         const outputBuffer = outputs[0];
-        const outputChannel = outputBuffer[0];
-        this._outputRingBuffer.play([outputChannel], ignoreWritePtr);
+        let outputChannel = outputBuffer[0];
+        outputChannel = inputs0[0] * 0;
+        this._outputRingBuffer.play([outputChannel], ignoreWritePtr, this.volume);
         if (output0.length > 1) {
             for (let counter = 0; counter < output0[1].length; counter++) {
                 output0[1][counter] = outputChannel[counter];
@@ -263,9 +266,9 @@ class StethWorkletProcessor extends AudioWorkletProcessor {
         } */
         for (let i=0; i<samples.length; i++) {
             //for (let j=0; j< numChannels; j++) {
-                //offset = (i * numChannels) + j;
-                last_val += (alpha * (samples[i] - last_val));
-                samples[i] = last_val;
+            //offset = (i * numChannels) + j;
+            last_val += (alpha * (samples[i] - last_val));
+            samples[i] = last_val;
             //}
         }
         // console.log('Processed samples: ', samples);
@@ -325,18 +328,22 @@ class RingBuffer {
      * @param  {array} arraySequence A sequence of Float32Arrays.
      * @param  {boolean} heartMode A boolean to check if its heart mode. If false its lung mode
      */
-    push(arraySequence, heartMode = true, gain, applyOnlyGain = false) {
+    push(arraySequence, heartMode = true, gain, applyOnlyGain = false,isAutoGainEnabled = true , isFilterEnabled =true) {
         // The channel count of arraySequence and the length of each channel must
         // match with this buffer obejct.
         // call the filter
-        if(applyOnlyGain){
-            arraySequence[0] = this.gainFilter(arraySequence[0], gain, heartMode);
-        } else
-        if(heartMode) {
-            arraySequence[0] = this.heartFilter(arraySequence[0], gain);
-        } else {
-            arraySequence[0] = this.lungFilter(arraySequence[0], gain);
+
+        if(isFilterEnabled) {
+            if(applyOnlyGain){
+                arraySequence[0] = this.gainFilter(arraySequence[0], gain, heartMode);
+            } else
+            if(heartMode) {
+                arraySequence[0] = this.heartFilter(arraySequence[0], "1", isAutoGainEnabled);
+            } else {
+                arraySequence[0] = this.lungFilter(arraySequence[0], gain, isAutoGainEnabled);
+            }
         }
+
         // Transfer data from the |arraySequence| storage to the internal buffer.
         // Source length is always 960
         let sourceLength = arraySequence[0].length;
@@ -420,7 +427,7 @@ class RingBuffer {
     }
 
     // Apply the heart filters
-    heartFilter(arraySequence, gain) {
+    heartFilter(arraySequence, gain, isAutoGainEnabled = true) {
         arraySequence = this.heartFilters['hp'].process(arraySequence);
         arraySequence = this.heartFilters['peek'].process(arraySequence);
         arraySequence = this.heartFilters['lp'].process(arraySequence);
@@ -430,13 +437,15 @@ class RingBuffer {
         arraySequence = this.heartFilters['peek1'].process(arraySequence);
         arraySequence = this.heartFilters['peek2'].process(arraySequence);
         arraySequence = this.heartFilters['peek3'].process(arraySequence);
-        arraySequence = this.heartGainMaximize(arraySequence, arraySequence.length, gain);
+        if(isAutoGainEnabled) {
+            arraySequence = this.heartGainMaximize(arraySequence, arraySequence.length, gain);
+        }
         arraySequence = this.heartFilters['peek3'].processGain(arraySequence, parseFloat(gain));
         return arraySequence;
     }
 
     // Apply lung filters
-    lungFilter(arraySequence, gain) {
+    lungFilter(arraySequence, gain, isAutoGainEnabled = true) {
         arraySequence = this.lungFilters['hp'].process(arraySequence);
         arraySequence = this.lungFilters['lp'].process(arraySequence);
         arraySequence = this.lungFilters['bw'].process(arraySequence);
@@ -461,7 +470,7 @@ class RingBuffer {
 
     // Apply heart audio gain
     heartGainMaximize(io, currentChunkSize, manualGain = 1) {
-        const gProcessingSampleRate = 16000;
+        const gProcessingSampleRate = 44100;
         const gMaxSignalHeart = 1.5;
         const gMinHeartGain = 2.0;
         if(!this.heart_currentGain) {
@@ -474,12 +483,12 @@ class RingBuffer {
 
         let peakInitialEstimate = 0.1;
         let peakHeldEstimate = 0.1;
-        
+
         let debugCounter = 0;
-        
+
         let noiseDecay = (1.0 / (0.5 * gProcessingSampleRate)); //500ms peak decay
         let noisePeak = 0.0;
-        
+
         //int holdEstimateSamples = (int)(holdEstimateTime * gProcessingSampleRate);
 
         let peakInitialDecayAlpha = (1.0 / (1.0 * gProcessingSampleRate)); //peak level initial est TC (1 second)
@@ -489,12 +498,12 @@ class RingBuffer {
         //Gain smoothing time constant
         let gainIncreaseAlpha = (1.0 / (1.0 * gProcessingSampleRate)); //1 second
         let gainDecreaseAlpha = (1.0 / (1.0 * gProcessingSampleRate)); //1 second
-        
+
         let nse, level, gainTarget, alpha;
         let k;
         let noiseDisable = 0;
         let statusStr;
-        
+
         //Maintain an estimate of peak level using initial and final estimates.
 
 
@@ -504,10 +513,10 @@ class RingBuffer {
             this.runBiquad.setHighpass2(250, 0.707107);
             nse = this.runBiquad.process(io[k]);
             // nse = runBiquad(&HighPass250, gProcessingSampleRate, io[k]);
-            
+
             noisePeak = this.peakDetect(nse, noisePeak, noiseDecay);
             //peakDetect(level, &lowPeak, signalDecay);
-            
+
             if(noisePeak < maxNoise) {
                 if(level > peakInitialEstimate) {
                     peakInitialEstimate = level; //typically this is a loud heartbeat but might be noise
@@ -519,7 +528,7 @@ class RingBuffer {
             } else {
                 noiseDisable = 1;
             }
-            
+
             if(peakInitialEstimate > peakHeldEstimate) {
                 peakHeldEstimate += peakHeldAttackAlpha * (peakInitialEstimate - peakHeldEstimate);
             } else {
@@ -528,31 +537,31 @@ class RingBuffer {
                 peakHeldEstimate += peakHeldDecayAlpha * (peakInitialEstimate - peakHeldEstimate);
             }
         }
-        
+
         if(noiseDisable) {
             statusStr = "Disable";
         } else {
             statusStr = "Enable";
         }
-        
+
         //prevent zero division
         if(peakHeldEstimate < 0.0001) {
             peakHeldEstimate = 0.0001;
         }
-        
+
         gainTarget = gMaxSignalHeart / peakHeldEstimate;
-        
-        
+
+
         if(gainTarget > maxGain){
             gainTarget = maxGain;
         }
-        
+
         if(gainTarget < gMinHeartGain){
             gainTarget = gMinHeartGain;
         }
-        
+
         //smoothly change the gain
-        
+
         let hgain = this.heart_currentGain; //Global heart_currentGain
 
         if(hgain < Number.MIN_VALUE) {
@@ -564,13 +573,13 @@ class RingBuffer {
             hgain += alpha * (gainTarget - hgain);
             io[k] *= hgain;
         }
-    
+
         if(++debugCounter > 10) {
             debugCounter = 0;
             console.log(`noise ${noisePeak}: ${statusStr}, finalpk ${peakHeldEstimate}, gain ${hgain}, Fs ${gProcessingSampleRate}`);
             // printf("noise %f: %s, finalpk %f, gain %f, Fs %f\n", noisePeak, statusStr, peakHeldEstimate, hgain, gProcessingSampleRate);
         }
-        
+
         this.heart_currentGain = hgain;
 
         return io;
@@ -588,25 +597,25 @@ class RingBuffer {
 
     // Apply lung gain filter
     stethFilter_getAppropriateGainLung(buffer, frames) {
-        const gProcessingSampleRate = 16000;
+        const gProcessingSampleRate = 44100;
         const gLungGainDesiredAverage = 0.1;
 
         let sampleGain = 0.0;
         let kAlpha = 1.0 / (gProcessingSampleRate * 5.0);
         let kFast = 1.0 / (gProcessingSampleRate * 0.02);
-        
+
         // if (shouldCalculateGain(frames)) { }
         for (let count = 0; count < frames; count++) {
             this.lung_historical_average = (kAlpha * Math.abs(buffer[count])) + (1.0 - kAlpha) * this.lung_historical_average;
         }
-    
+
         let lung_gain = gLungGainDesiredAverage*1.0/this.lung_historical_average;
-    
+
         if (lung_gain > 10.0) // change to double or triple, brighten up screen, goal is lung_gain * audio [0..1.00] == 1.0
             lung_gain = 10.0;
         if (lung_gain < 0.1)
             lung_gain = 0.1;
-        
+
         for (let count = 0; count <frames; count++)
         {
             //1st order (pole only) IIR filter applied to gain per sample
@@ -622,7 +631,7 @@ class RingBuffer {
      *
      * @param  {array} arraySequence An array of Float32Arrays.
      */
-    pull(arraySequence, ignoreWritePointer, step = 1.0) {
+    pull(arraySequence, ignoreWritePointer, step = 1.0, volume = 1) {
         // The channel count of arraySequence and the length of each channel must
         // match with this buffer obejct.
 
@@ -651,7 +660,7 @@ class RingBuffer {
     }
 
     // play tries to keep things real time.
-    play(arraySequence, ignoreWritePointer) {
+    play(arraySequence, ignoreWritePointer, volume = 1) {
 
         // console.log('WriteIndex: ', this._writeIndex);
         // console.log('ReadIndex: ', this._readIndex);
@@ -683,187 +692,187 @@ class RingBuffer {
             //     step = 1.15;
             // }
         }
-        this.pull(arraySequence, ignoreWritePointer, step)
+        this.pull(arraySequence, ignoreWritePointer, step,volume)
     }
 
 } // class RingBuffer
 
- 
+
 class BiquadNode {
-  constructor() {
-    this.sampleRate = 16000;
-    this.swap = 0;
-    this.a0 = 1.0;
-    this.a1 = 0.0;
-    this.a2 = 0.0;
-    this.b1 = 0.0;
-    this.b2 = 0.0;
-    this.x1 = 0;
-    this.x2 = 0;
-    this.y1 = 0;
-    this.y2 = 0;
-  }
-
-  setLowpass2(freq, Q) {
-    var w = Math.tan((Math.PI * freq) / this.sampleRate);
-
-    if (Q < 0.5) {
-      Q = 0.5;
-    }
-
-    if (w < 1e-5) {
-      //somewhat arbitrary low-frequency limit
-      w = 1e-5;
-    }
-
-    var W = 1.0 / w;
-    var b = 1.0 / Q;
-
-    var dn = (W + b) * W + 1.0;
-
-    if (dn < 1e-6) {
-      dn = 1e-6; //prevent divide by zero
-    }
-
-    var D = 1.0 / dn;
-    this.a0 = D;
-    this.a1 = 2.0 * D;
-    this.a2 = D;
-    this.b1 = 2.0 * (1.0 - W * W) * D;
-    this.b2 = ((W - b) * W + 1.0) * D;
-  }
-
-  setHighpass2(freq, Q) {
-    var w = Math.tan((Math.PI * freq) / this.sampleRate);
-
-    if (Q < 0.5) {
-      Q = 0.5;
-    }
-
-    if (w < 1e-5) {
-      //somewhat arbitrary low-frequency limit
-      w = 1e-5;
-    }
-
-    var W = 1.0 / w;
-    var b = 1.0 / Q;
-
-    var dn = (W + b) * W + 1.0;
-
-    if (dn < 1e-6) {
-      dn = 1e-6; //prevent divide by zero
-    }
-
-    var D = 1.0 / dn;
-    this.a0 = W * W * D;
-    this.a1 = -2.0 * this.a0;
-    this.a2 = this.a0;
-    this.b1 = 2.0 * (1.0 - W * W) * D;
-    this.b2 = ((W - b) * W + 1.0) * D;
-  }
-
-  setPeaking(freq, Q, dB) {
-    if (Q < 0.5) {
-      Q = 0.5;
-    }
-
-    if (freq < 5) {
-      //somewhat arbitrary low-frequency limit
-      freq = 5;
-    }
-
-    var V = Math.pow(10.0, Math.abs(dB) / 20.0);
-
-    var K = Math.tan((Math.PI * freq) / this.sampleRate);
-
-    var norm;
-
-    if (dB >= 0) {
-      norm = 1 / (1 + (1 / Q) * K + K * K);
-      this.a0 = (1 + (V / Q) * K + K * K) * norm;
-      this.a1 = 2 * (K * K - 1) * norm;
-      this.a2 = (1 - (V / Q) * K + K * K) * norm;
-      this.b1 = this.a1;
-      this.b2 = (1 - (1 / Q) * K + K * K) * norm;
-    } else {
-      norm = 1 / (1 + (V / Q) * K + K * K);
-      this.a0 = (1 + (1 / Q) * K + K * K) * norm;
-      this.a1 = 2 * (K * K - 1) * norm;
-      this.a2 = (1 - (1 / Q) * K + K * K) * norm;
-      this.b1 = this.a1;
-      this.b2 = (1 - (V / Q) * K + K * K) * norm;
-    }
-  }
-
-  //Two biquads: section 0 then section 1
-  setBW4Section(freq, section) {
-    var opt, b;
-
-    if (section) opt = 7.0;
-    else opt = 5.0;
-
-    b = -2.0 * Math.cos((opt * Math.PI) / 8.0);
-
-    this.setLowpass2(freq, 1.0 / b);
-  }
-
-  //Two biquads: section 0 then section 1
-  setBW4HPSection(freq, section) {
-    var opt, b;
-
-    if (section) opt = 7.0;
-    else opt = 5.0;
-
-    b = -2.0 * Math.cos((opt * Math.PI) / 8.0);
-
-    this.setHighpass2(freq, 1.0 / b);
-  }
-
-  processGain(inputChannel, gain) {
-    if(typeof inputChannel === 'undefined') {
-        return true;
-    } 
-    for(var k = 0; k < inputChannel.length; ++k) {
-        inputChannel[k] = inputChannel[k] * gain;
-    }
-    return inputChannel;
-  }
-
-  process(inputChannel) {
-
-    if (typeof inputChannel === "undefined") {
-      return true;
-    }
-
-    for (var k = 0; k < inputChannel.length; ++k) {
-      var x = inputChannel[k];
-
-      if (this.swap) {
-        var y =
-          this.a0 * x +
-          this.a1 * this.x1 +
-          this.a2 * this.x2 -
-          this.b1 * this.y1 -
-          this.b2 * this.y2;
-        this.x2 = x;
-        this.y2 = y;
+    constructor() {
+        this.sampleRate = 44100;
         this.swap = 0;
-      } else {
-        var y =
-          this.a0 * x +
-          this.a1 * this.x2 +
-          this.a2 * this.x1 -
-          this.b1 * this.y2 -
-          this.b2 * this.y1;
-        this.x1 = x;
-        this.y1 = y;
-        this.swap = 1;
-      }
-
-      inputChannel[k] = y;
+        this.a0 = 1.0;
+        this.a1 = 0.0;
+        this.a2 = 0.0;
+        this.b1 = 0.0;
+        this.b2 = 0.0;
+        this.x1 = 0;
+        this.x2 = 0;
+        this.y1 = 0;
+        this.y2 = 0;
     }
 
-    return inputChannel;
-  } //process
+    setLowpass2(freq, Q) {
+        var w = Math.tan((Math.PI * freq) / this.sampleRate);
+
+        if (Q < 0.5) {
+            Q = 0.5;
+        }
+
+        if (w < 1e-5) {
+            //somewhat arbitrary low-frequency limit
+            w = 1e-5;
+        }
+
+        var W = 1.0 / w;
+        var b = 1.0 / Q;
+
+        var dn = (W + b) * W + 1.0;
+
+        if (dn < 1e-6) {
+            dn = 1e-6; //prevent divide by zero
+        }
+
+        var D = 1.0 / dn;
+        this.a0 = D;
+        this.a1 = 2.0 * D;
+        this.a2 = D;
+        this.b1 = 2.0 * (1.0 - W * W) * D;
+        this.b2 = ((W - b) * W + 1.0) * D;
+    }
+
+    setHighpass2(freq, Q) {
+        var w = Math.tan((Math.PI * freq) / this.sampleRate);
+
+        if (Q < 0.5) {
+            Q = 0.5;
+        }
+
+        if (w < 1e-5) {
+            //somewhat arbitrary low-frequency limit
+            w = 1e-5;
+        }
+
+        var W = 1.0 / w;
+        var b = 1.0 / Q;
+
+        var dn = (W + b) * W + 1.0;
+
+        if (dn < 1e-6) {
+            dn = 1e-6; //prevent divide by zero
+        }
+
+        var D = 1.0 / dn;
+        this.a0 = W * W * D;
+        this.a1 = -2.0 * this.a0;
+        this.a2 = this.a0;
+        this.b1 = 2.0 * (1.0 - W * W) * D;
+        this.b2 = ((W - b) * W + 1.0) * D;
+    }
+
+    setPeaking(freq, Q, dB) {
+        if (Q < 0.5) {
+            Q = 0.5;
+        }
+
+        if (freq < 5) {
+            //somewhat arbitrary low-frequency limit
+            freq = 5;
+        }
+
+        var V = Math.pow(10.0, Math.abs(dB) / 20.0);
+
+        var K = Math.tan((Math.PI * freq) / this.sampleRate);
+
+        var norm;
+
+        if (dB >= 0) {
+            norm = 1 / (1 + (1 / Q) * K + K * K);
+            this.a0 = (1 + (V / Q) * K + K * K) * norm;
+            this.a1 = 2 * (K * K - 1) * norm;
+            this.a2 = (1 - (V / Q) * K + K * K) * norm;
+            this.b1 = this.a1;
+            this.b2 = (1 - (1 / Q) * K + K * K) * norm;
+        } else {
+            norm = 1 / (1 + (V / Q) * K + K * K);
+            this.a0 = (1 + (1 / Q) * K + K * K) * norm;
+            this.a1 = 2 * (K * K - 1) * norm;
+            this.a2 = (1 - (1 / Q) * K + K * K) * norm;
+            this.b1 = this.a1;
+            this.b2 = (1 - (V / Q) * K + K * K) * norm;
+        }
+    }
+
+    //Two biquads: section 0 then section 1
+    setBW4Section(freq, section) {
+        var opt, b;
+
+        if (section) opt = 7.0;
+        else opt = 5.0;
+
+        b = -2.0 * Math.cos((opt * Math.PI) / 8.0);
+
+        this.setLowpass2(freq, 1.0 / b);
+    }
+
+    //Two biquads: section 0 then section 1
+    setBW4HPSection(freq, section) {
+        var opt, b;
+
+        if (section) opt = 7.0;
+        else opt = 5.0;
+
+        b = -2.0 * Math.cos((opt * Math.PI) / 8.0);
+
+        this.setHighpass2(freq, 1.0 / b);
+    }
+
+    processGain(inputChannel, gain) {
+        if(typeof inputChannel === 'undefined') {
+            return true;
+        }
+        for(var k = 0; k < inputChannel.length; ++k) {
+            inputChannel[k] = inputChannel[k] * gain;
+        }
+        return inputChannel;
+    }
+
+    process(inputChannel) {
+
+        if (typeof inputChannel === "undefined") {
+            return true;
+        }
+
+        for (var k = 0; k < inputChannel.length; ++k) {
+            var x = inputChannel[k];
+
+            if (this.swap) {
+                var y =
+                    this.a0 * x +
+                    this.a1 * this.x1 +
+                    this.a2 * this.x2 -
+                    this.b1 * this.y1 -
+                    this.b2 * this.y2;
+                this.x2 = x;
+                this.y2 = y;
+                this.swap = 0;
+            } else {
+                var y =
+                    this.a0 * x +
+                    this.a1 * this.x2 +
+                    this.a2 * this.x1 -
+                    this.b1 * this.y2 -
+                    this.b2 * this.y1;
+                this.x1 = x;
+                this.y1 = y;
+                this.swap = 1;
+            }
+
+            inputChannel[k] = y;
+        }
+
+        return inputChannel;
+    } //process
 }
 

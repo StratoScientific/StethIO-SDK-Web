@@ -172,8 +172,6 @@ export default class AudioEngine {
         // this.bufferSource = this.audioContext.createBufferSource();
 
         await this.audioContext.audioWorklet.addModule('https://cdn.jsdelivr.net/gh/StratoScientific/StethIO-SDK-Web/assets/steth-worklet-processor.js', {"credentials": "omit"})
-        console.log('startIt start');
-
         // await this.audioContext.audioWorklet.addModule('assets/steth-worklet-processor.js', {"credentials": "omit"});
         console.log('startIt');
         return this.onModuleAdded(liveInput);
@@ -277,9 +275,10 @@ export default class AudioEngine {
 
     /* Volume alter functionalities */
     volumeSet(value) {
-        this.socketWorkletNode.port.postMessage({
-            type: 'volume', volume: value, heartMode: (this.mode == 'HEART')
-        });
+        this.gainNode.gain.value = value;
+        // this.socketWorkletNode.port.postMessage({
+        //     type: 'volume', volume: value, heartMode: (this.mode == 'HEART')
+        // });
     }
     /* Volume alter functionalities */
 
@@ -347,9 +346,11 @@ export default class AudioEngine {
         // the background thread processor that gets the bytes
         this.socketWorkletNode = new AudioWorkletNode(this.audioContext, 'socket-worklet');
         // this.micSourceNode.connect(this.socketWorkletNode);
-        this.socketWorkletNode.connect(this.audioContext.destination);
+        this.gainNode.connect(this.audioContext.destination);
+        this.socketWorkletNode.connect(this.gainNode);
         this.spectrogramDrawer = new SpectrogramDrawer(this.audioContext, this.divID, heartMode);
         this.spectrogramDrawer.beginDisplay();
+
         // Note: This means it will show graph of unfiltered audio
         this.socketWorkletNode.connect(this.spectrogramDrawer.analyserNode);
         // Note: Not working
@@ -628,12 +629,21 @@ export default class AudioEngine {
             num_of_channels: 1,
             params: {
                 application: 2049,
-                sampling_rate: 48000,
+                sampling_rate: 16000,
+                // sampling_rate: 44101,
                 frame_duration: 20 // ms
             }
         };
+        try {
+            return this.encoder.setup(enc_cfg);
+
+        }
+        catch (e) {
+            debugger;
+            console.log("Iam here");
+            console.log(e);
+        }
         /* console.log('About to set up encoder '); */
-        return this.encoder.setup(enc_cfg);
     }
 
     // header packets: the first (one? - how do I tell? )
